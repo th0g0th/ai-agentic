@@ -27,18 +27,15 @@ Example: `figma.com/design/abc123XYZ/MyApp?node-id=45-22`
 If no URL provided, ask:
 > Share the Figma URL. Include node-id in URL if you want a specific section.
 
-### Step 2: Guided Discovery
+### Step 2: Smart Default Scope
 
-Before fetching, ask what the user needs (prevents over-fetching, saves 60-80% tokens):
+Default behavior based on URL:
 
-> What do you need from this Figma file?
->
-> 1. **Page overview** — layout structure, component hierarchy
-> 2. **Specific component** — inspect one component (provide node ID or name)
-> 3. **Design tokens** — colors, typography, spacing
-> 4. **Images/icons** — download SVGs or PNGs
-> 5. **Implementation specs** — dimensions, padding, gaps for code
-> 6. **Deep dive** — everything about a specific frame/section
+- **URL has nodeId** → fetch implementation specs for that component directly (no questions needed)
+- **URL has no nodeId** → fetch `depth=1` overview, then ask which frame to inspect
+
+After presenting initial results, offer additional options as follow-ups:
+> Need more? I can also extract design tokens, download images, or deep-dive into a specific child component.
 
 ### Step 3: Fetch with Minimal Scope
 
@@ -54,6 +51,14 @@ Before fetching, ask what the user needs (prevents over-fetching, saves 60-80% t
 **IMPORTANT:** Never call `get_figma_data(fileKey)` without `nodeId` or `depth`.
 
 ### Step 4: Present Results as Structured Data
+
+Progress checklist (internal tracking — do not skip steps):
+- [ ] URL parsed (fileKey + nodeId extracted)
+- [ ] Scope determined (smart default or user-confirmed)
+- [ ] Data fetched with minimal scope
+- [ ] Results presented in structured format
+- [ ] Self-validated (all requested properties present, node IDs correct)
+- [ ] Follow-up offered
 
 Use compact key-value format. No prose.
 
@@ -72,10 +77,20 @@ Children: 2x InputField, Button, Link
 - Section: 32px | Element: 16px | Card padding: 24px
 ```
 
-### Step 5: Follow-up
+### Step 5: Self-Validate
+
+Before presenting final results, verify:
+- All requested properties included (dimensions, colors, spacing, typography)
+- Node IDs match parent frame context
+- No placeholder or default values slipped through
+- Structured format used (no prose descriptions)
+
+### Step 6: Follow-up
 
 After presenting, offer next actions:
 > Dive deeper into a component? Download images? Generate implementation code? Extract more tokens?
+
+If design tokens were extracted, offer to save to `{project-root}/design-tokens.json` for cross-session reuse. In future sessions, check for this file before re-fetching from Figma.
 
 ## Token Optimization (Quick Reference)
 
@@ -89,8 +104,18 @@ After presenting, offer next actions:
 8. **Pruned tree** — keep responses <500KB; avoids 429 rate limits
 9. **Cross-session caching** — offer to save extracted design tokens to local file
 
-Detailed patterns and cost comparisons: [references/token-optimization-patterns.md](references/token-optimization-patterns.md)
-MCP server setup recommendations: [references/mcp-server-recommendations.md](references/mcp-server-recommendations.md)
+**Load references conditionally:**
+- Read `references/token-optimization-patterns.md` if fetching 3+ nodes or response exceeds 2000 tokens
+- Read `references/mcp-server-recommendations.md` if user asks about MCP setup or gets connection/auth errors
+
+## Gotchas
+
+- `node-id` in URLs uses `-` separator but API expects `:` — always convert (e.g., `45-22` → `45:22`)
+- Figma MCP may return empty children for components in shared libraries — fetch the library file directly
+- `depth=0` returns only the node itself with no children — not the same as omitting depth
+- Rate limits (429) hit fast on image exports — batch downloads and use exponential backoff
+- Auto Layout properties (`layoutMode`, `primaryAxisAlignItems`) only appear on frames with Auto Layout enabled — don't assume all frames have them
+- Component variants share the same `componentId` — use `name` property to distinguish between variants
 
 ## Error Handling
 
